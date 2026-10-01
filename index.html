@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jadual Waktu SKTR2</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f1f5f9;color:#0f172a}
+  .wrap{max-width:480px;margin:0 auto;padding:16px}
+  h1{font-size:20px;text-align:center;margin:8px 0 16px}
+  .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+  label{display:block;font-size:14px;font-weight:bold;margin:12px 0 4px}
+  select{width:100%;padding:12px;font-size:16px;border:1px solid #cbd5e1;border-radius:8px;background:#fff}
+  .edisi{margin-top:16px;border-top:1px solid #e2e8f0;padding-top:12px}
+  .edisi b{display:block;margin-bottom:8px}
+  .btns{display:flex;gap:8px}
+  .btns a{flex:1;text-align:center;padding:12px;border-radius:8px;text-decoration:none;font-size:15px;color:#fff}
+  .papar{background:#2563eb}.muat{background:#16a34a}
+  #msg{margin-top:12px;font-size:14px}
+  .err{color:#b91c1c;background:#fee2e2;padding:10px;border-radius:8px}
+  .info{color:#475569}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Jadual Waktu SKTR2</h1>
+  <div class="card">
+    <label for="tahun">Tahun</label>
+    <select id="tahun" disabled><option>Memuatkan...</option></select>
+    <label for="kat">Kategori</label>
+    <select id="kat" disabled></select>
+    <label for="nama">Nama</label>
+    <select id="nama" disabled></select>
+    <div id="msg"></div>
+    <div id="hasil"></div>
+  </div>
+</div>
+
+<script>
+// >>> TAMPAL PAUTAN /exec ANDA DI SINI <<<
+const API = "https://script.google.com/macros/s/AKfycbxbs0QR24TZvWe7k9r-rcu1gCVNTTVI3ZlqkCJTj6Nb_lGYPpVbly7lE1MKIEeYMx47IQ/exec";
+
+let DATA = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+
+function msg(t, err){ $("msg").innerHTML = t ? '<div class="'+(err?'err':'info')+'">'+t+'</div>' : ""; }
+
+async function api(params){
+  const r = await fetch(API + "?" + new URLSearchParams(params));
+  const j = await r.json();
+  if (j && j.error) throw new Error(j.error);
+  return j;
+}
+function fail(){ msg("Gagal memuatkan data. Semak internet dan muat semula halaman.", true); }
+function fill(sel, arr, ph){
+  sel.innerHTML = '<option value="">' + ph + '</option>' + arr.map(v => '<option>' + esc(v) + '</option>').join("");
+  sel.disabled = false;
+}
+
+api({action:"tahun"}).then(list => { fill($("tahun"), list, "-- Pilih tahun --"); msg(""); }).catch(fail);
+
+$("tahun").onchange = async () => {
+  $("hasil").innerHTML = ""; $("kat").disabled = $("nama").disabled = true;
+  if(!$("tahun").value) return;
+  msg("Memuatkan...");
+  try{
+    DATA = await api({action:"data", tahun:$("tahun").value});
+    msg("");
+    fill($("kat"), Object.keys(DATA.map), "-- Pilih kategori --");
+    $("nama").innerHTML = ""; $("nama").disabled = true;
+  }catch(e){ fail(); }
+};
+
+$("kat").onchange = () => {
+  $("hasil").innerHTML = "";
+  if(!$("kat").value) return;
+  fill($("nama"), DATA.map[$("kat").value], "-- Pilih nama --");
+};
+
+$("nama").onchange = async () => {
+  $("hasil").innerHTML = "";
+  if(!$("nama").value) return;
+  msg("Mencari jadual...");
+  try{
+    const r = await api({action:"jadual", tahun:$("tahun").value, k:$("kat").value, n:$("nama").value});
+    if(!r){ msg("Jadual tidak dijumpai.", true); return; }
+    msg("");
+    let h = "";
+    r.edisi.forEach((e, i) => {
+      if(!e) return;
+      h += '<div class="edisi"><b>' + esc(DATA.labels[i]) + '</b>';
+      if(e.teks) h += '<div class="info">' + esc(e.teks) + '</div>';
+      else h += '<div class="btns">' +
+        '<a class="papar" target="_blank" rel="noopener" href="'+e.papar+'" onclick="stat('+i+',\'papar\')">Papar</a>' +
+        '<a class="muat" target="_blank" rel="noopener" href="'+e.muat+'" onclick="stat('+i+',\'download\')">Muat Turun</a></div>';
+      h += '</div>';
+    });
+    $("hasil").innerHTML = h || '<div class="info">Tiada jadual untuk dipaparkan.</div>';
+  }catch(e){ fail(); }
+};
+
+function stat(i, type){
+  try{
+    fetch(API + "?" + new URLSearchParams({action:"log", tahun:$("tahun").value, k:$("kat").value,
+      n:$("nama").value, edisi:DATA.labels[i], type:type}), {mode:"no-cors", keepalive:true});
+  }catch(e){}
+}
+</script>
+</body>
+</html>
